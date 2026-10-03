@@ -604,3 +604,69 @@
     width: 100%;
   }
 }
+
+
+/* Mobile ergonomics: comfortable spacing, readable controls, and safe-area support. */
+@media (max-width: 768px) {
+  .uploader__columns {
+    gap: 24px;
+  }
+
+  .uploader__edit {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
+  .uploader__tiles-section {
+    padding: 12px 0;
+  }
+
+  .uploader__tiles-btn-bar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .uploader__action-btn,
+  .uploader__create-btn {
+    width: 100%;
+    min-height: 46px;
+    min-width: 0;
+  }
+
+  .uploader__tiles-grid {
+    max-height: 190px;
+    gap: 7px;
+  }
+
+  .uploader__tile-thumb,
+  .uploader__tile-more {
+    width: 48px;
+    height: 48px;
+  }
+
+  .uploader__section-header {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .uploader__sample-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .uploader__sample-card {
+    min-width: 0;
+  }
+
+  .uploader__preview {
+    border-radius: 12px;
+  }
+
+  .uploader__confirm-box {
+    position: sticky;
+    bottom: 0;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+    background: linear-gradient(to bottom, rgba(8, 8, 8, 0.82), #080808 24%);
+    z-index: 5;
+  }
+}
