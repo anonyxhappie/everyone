@@ -848,3 +848,201 @@
     text-overflow: ellipsis;
   }
 }
+
+
+/* Responsive interaction layer: keeps the artwork immersive on phones and tablets. */
+.mosaic-viewer__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .mosaic-viewer__header {
+    padding: 14px 18px;
+    gap: 12px;
+  }
+
+  .mosaic-viewer__brand {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-align: center;
+  }
+
+  .mosaic-viewer__toolbar {
+    gap: 6px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .mosaic-viewer__export-btn,
+  .mosaic-viewer__macro-btn,
+  .mosaic-viewer__tune-btn,
+  .mosaic-viewer__3d-studio-btn,
+  .mosaic-viewer__compare-btn {
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mosaic-viewer__header {
+    padding: max(10px, env(safe-area-inset-top)) 12px 12px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mosaic-viewer__back-btn {
+    font-size: 0.72rem;
+    gap: 4px;
+    white-space: nowrap;
+    min-height: 40px;
+    padding: 8px 0;
+  }
+
+  .mosaic-viewer__brand {
+    flex: 1;
+    min-width: 0;
+    max-width: 38vw;
+    font-size: 0.58rem;
+    line-height: 1.35;
+    letter-spacing: 0.08em;
+    overflow-wrap: anywhere;
+  }
+
+  .mosaic-viewer__header-actions {
+    gap: 6px;
+  }
+
+  .mosaic-viewer__header-3d-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .mosaic-viewer__tune-toggle {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .mosaic-viewer__controls {
+    top: auto;
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: min(68dvh, 620px);
+    padding: 16px;
+    border-radius: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mosaic-viewer__controls-header {
+    position: sticky;
+    top: -16px;
+    z-index: 2;
+    padding: 4px 0 12px;
+    background: rgba(14, 14, 14, 0.97);
+  }
+
+  .mosaic-viewer__toolbar {
+    left: 10px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+    max-width: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .mosaic-viewer__toolbar > button,
+  .mosaic-viewer__toolbar > .btn-icon {
+    min-width: 0;
+    min-height: 42px;
+    width: 100%;
+    justify-content: center;
+    padding: 9px 6px;
+    font-size: 0.68rem;
+    gap: 5px;
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .mosaic-viewer__toolbar > button svg {
+    flex-shrink: 0;
+  }
+
+  .mosaic-viewer__toolbar > button span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .mosaic-viewer__zoom-hint {
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    white-space: normal;
+    text-align: center;
+    line-height: 1.35;
+  }
+
+  .mosaic-viewer__shape-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .mosaic-viewer__density-btn {
+    min-height: 38px;
+  }
+
+  .mosaic-viewer__slider {
+    height: 6px;
+  }
+
+  .mosaic-viewer__slider::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mosaic-inspector {
+    padding: 12px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .mosaic-inspector__card {
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 380px) {
+  .mosaic-viewer__brand {
+    display: none;
+  }
+
+  .mosaic-viewer__header {
+    justify-content: space-between;
+  }
+
+  .mosaic-viewer__toolbar > button {
+    font-size: 0.62rem;
+    padding-inline: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mosaic-viewer__toolbar,
+  .mosaic-viewer__controls,
+  .mosaic-inspector {
+    animation: none;
+  }
+}
