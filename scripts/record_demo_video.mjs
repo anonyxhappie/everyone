@@ -360,13 +360,13 @@ async function run() {
     await clickLocator(settings3DToggle, 300, 600);
 
     // Switch to Cameo Medallion mode
-    const cameoBtn = page.locator('button:has-text("Cameo Medallion")');
+    const cameoBtn = page.locator('.mosaic-3d__mode-btn').filter({ hasText: 'Cameo Medallion' });
     if (await cameoBtn.isVisible()) {
       await clickLocator(cameoBtn, 300, 1200);
     }
 
     // Switch to Architectural mode
-    const archBtn = page.locator('button:has-text("Architectural")');
+    const archBtn = page.locator('.mosaic-3d__mode-btn').filter({ hasText: 'Architectural' });
     if (await archBtn.isVisible()) {
       await clickLocator(archBtn, 300, 1200);
     }
@@ -379,12 +379,12 @@ async function run() {
   }
 
   // Cycle Camera Presets
-  const heroPreset = page.locator('button:has-text("Hero Low")');
+  const heroPreset = page.locator('.mosaic-3d__preset-btn').filter({ hasText: 'Hero Low' });
   if (await heroPreset.isVisible()) {
     await clickLocator(heroPreset, 300, 1000);
   }
 
-  const profilePreset = page.locator('button:has-text("Side Profile")');
+  const profilePreset = page.locator('.mosaic-3d__preset-btn').filter({ hasText: 'Side Profile' });
   if (await profilePreset.isVisible()) {
     await clickLocator(profilePreset, 300, 1200);
   }
