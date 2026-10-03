@@ -506,3 +506,77 @@
   color: #8c877f;
   letter-spacing: 0.03em;
 }
+
+
+/* Mobile-first 3D studio layout: keep configuration controls visible and usable. */
+@media (max-width: 768px) {
+  .mosaic-3d { height: 100dvh; height: 100svh; }
+
+  .mosaic-3d__header {
+    height: auto;
+    min-height: 56px;
+    padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+    gap: 8px;
+    align-items: center;
+  }
+  .mosaic-3d__back-btn {
+    flex: 0 0 auto; max-width: 42vw; white-space: normal;
+    line-height: 1.25; padding: 8px 10px; font-size: 0.7rem;
+  }
+  .mosaic-3d__title-box { min-width: 0; flex: 1 1 auto; }
+  .mosaic-3d__badge {
+    font-size: 0.55rem; letter-spacing: 0.06em; line-height: 1.3;
+  }
+  .mosaic-3d__header-actions { flex: 0 0 auto; gap: 6px; }
+  .mosaic-3d__snapshot-btn {
+    min-height: 40px; width: 40px; padding: 0; justify-content: center; gap: 0;
+  }
+  .mosaic-3d__snapshot-btn span { display: none; }
+  .mosaic-3d__settings-toggle { flex: 0 0 40px; }
+
+  .mosaic-3d__camera-toolbar {
+    left: 10px; right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto; max-width: none; transform: none; box-sizing: border-box;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 5px; padding: 7px; border-radius: 16px;
+  }
+  .mosaic-3d__preset-group {
+    width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
+  }
+  .mosaic-3d__preset-btn {
+    min-width: 0; min-height: 36px; padding: 7px 3px;
+    font-size: 0.65rem; white-space: normal;
+  }
+  .mosaic-3d__toolbar-divider { display: none; }
+  .mosaic-3d__turntable-btn { min-height: 36px; padding: 7px 12px; font-size: 0.7rem; }
+  .mosaic-3d__gesture-guide { display: none; }
+
+  .mosaic-3d__drawer {
+    top: auto; left: 8px; right: 8px;
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    width: auto; max-width: none;
+    height: min(62dvh, 560px);
+    max-height: calc(100dvh - 120px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border-radius: 16px; z-index: 40;
+  }
+  .mosaic-3d__drawer-header { flex: 0 0 auto; padding: 12px 14px; }
+  .mosaic-3d__drawer-body {
+    min-height: 0; padding: 14px; gap: 16px;
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  }
+  .mosaic-3d__mode-btn { min-height: 52px; }
+  .mosaic-3d__finish-btn, .mosaic-3d__reset-btn { min-height: 42px; }
+}
+
+@media (max-width: 380px) {
+  .mosaic-3d__header { padding-left: 8px; padding-right: 8px; gap: 5px; }
+  .mosaic-3d__back-btn { max-width: 38vw; font-size: 0.64rem; padding: 7px 8px; }
+  .mosaic-3d__badge { font-size: 0.48rem; letter-spacing: 0.02em; }
+  .mosaic-3d__preset-btn { font-size: 0.58rem; }
+  .mosaic-3d__drawer {
+    left: 5px; right: 5px;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    height: min(66dvh, 540px);
+  }
+}
