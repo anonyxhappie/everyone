@@ -239,6 +239,7 @@ export default function App() {
             initialConfig={initialConfig}
             isRestored={isRestored}
             onStartOver={handleStartOver}
+            onStartCreate={handleStartCreate}
           />
         </div>
       )}

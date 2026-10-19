@@ -23,6 +23,7 @@ interface MosaicViewerProps {
   initialConfig?: MosaicConfig;
   isRestored?: boolean;
   onStartOver: () => void;
+  onStartCreate?: () => void;
 }
 
 type RevealPhase = 'portrait' | 'points' | 'tiles' | 'pullback' | 'complete';
@@ -60,7 +61,8 @@ export default function MosaicViewer({
   tiles, 
   initialConfig, 
   isRestored = false, 
-  onStartOver 
+  onStartOver,
+  onStartCreate
 }: MosaicViewerProps) {
   // Mosaic state
   const [mosaicResult, setMosaicResult] = useState<MosaicResult | null>(null);
@@ -287,8 +289,7 @@ export default function MosaicViewer({
   const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container || !mosaicResult || tileData.length === 0) return;
-
+    if (!canvas || !container) return;
     const rect = container.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
 
@@ -304,6 +305,31 @@ export default function MosaicViewer({
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
+    if (!mosaicResult || tileData.length === 0) {
+      if (activePortrait) {
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = '#080808';
+        ctx.fillRect(0, 0, w, h);
+        const marginW = w * 0.85;
+        const marginH = h * 0.80;
+        const aspect = activePortrait.width / activePortrait.height;
+        let baseW = marginW;
+        let baseH = baseW / aspect;
+        if (baseH > marginH) {
+          baseH = marginH;
+          baseW = baseH * aspect;
+        }
+        const artX = (w - baseW) / 2;
+        const artY = (h - baseH) / 2;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(activePortrait, artX, artY, baseW, baseH);
+        ctx.restore();
+      }
+      return;
+    }
 
     ctx.save();
     ctx.scale(dpr, dpr);
@@ -679,20 +705,26 @@ export default function MosaicViewer({
     }
   }, [mosaicResult, tileData, config, activePortrait]);
 
-  // Share via Web Share API
+  // Share via Web Share API with link-copy fallback
   const handleShare = useCallback(async () => {
-    if (!mosaicResult) return;
-
     try {
-      const blob = await exportWithSignature(mosaicResult.canvas, 'Everyone Is Part of You');
-      const shared = await shareImage(blob, 'Everyone Is Part of You');
-      if (!shared) {
-        downloadBlob(blob, 'everyone-is-part-of-you.png');
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: 'Everyone Is Part of You',
+          text: 'A recognizable portrait constructed from thousands of photographic moments.',
+          url: window.location.href,
+        });
+      } else {
+        const success = await copyToClipboard(window.location.href);
+        if (success) {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2500);
+        }
       }
     } catch {
-      // User cancelled
+      // User cancelled share
     }
-  }, [mosaicResult]);
+  }, []);
 
   // Copy app link
   const handleCopyLink = useCallback(async () => {
@@ -707,6 +739,14 @@ export default function MosaicViewer({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
+
+  // Replay transformation reveal sequence
+  const handleReplay = useCallback(() => {
+    setCompareMode(false);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    startCinematicReveal();
+  }, [startCinematicReveal]);
 
   if (error) {
     return (
@@ -796,15 +836,30 @@ export default function MosaicViewer({
       )}
 
       {/* Discovery Zoom Hint */}
-      {revealPhase === 'complete' && showZoomHint && (
+      {revealPhase === 'complete' && !showControls && showZoomHint && (
         <div className="mosaic-viewer__zoom-hint">
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
             <circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
             <path d="M12.5 12.5L17 17" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             <path d="M6 8.5H11M8.5 6V11" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
-          <span>Pinch or scroll to zoom into the photos · Click any photo to inspect</span>
+          <span>Pinch to zoom · Tap photo to inspect</span>
         </div>
+      )}
+
+      {/* Floating Reset Framing Button when Zoomed In */}
+      {revealPhase === 'complete' && zoom > 1.15 && (
+        <button
+          className="mosaic-viewer__reset-float-btn"
+          onClick={handleResetView}
+          title="Reset to full view"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            <path d="M2.5 8a5.5 5.5 0 1 1 1.6 3.9L2 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 9.5V14h4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>Reset view ({Math.round(zoom * 100)}%)</span>
+        </button>
       )}
 
       {/* Top Header Bar */}
@@ -817,25 +872,30 @@ export default function MosaicViewer({
           onTouchStart={(e) => e.stopPropagation()}
         >
           <button className="btn btn-ghost mosaic-viewer__back-btn" onClick={onStartOver}>
-            ← New portrait
+            ← {portrait.isDemo ? 'Home' : 'New portrait'}
           </button>
 
           <span className="mosaic-viewer__brand">EVERYONE IS PART OF YOU</span>
 
           <div className="mosaic-viewer__header-actions">
-            <button 
-              className="btn btn-secondary mosaic-viewer__header-3d-btn" 
-              onClick={() => handleToggle3DStudio(true)}
-              title="Launch 360° 3D Camera Studio with physical depth pop-out"
-            >
-              <span style={{ fontSize: '0.9rem' }}>🌐</span>
-              <span>360° 3D</span>
-            </button>
+            {portrait.isDemo && onStartCreate && (
+              <button 
+                className="btn btn-primary mosaic-viewer__header-make-btn" 
+                onClick={onStartCreate}
+                title="Create a mosaic from your own photos"
+              >
+                <span>Make yours</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
 
             <button 
               className={`btn-icon mosaic-viewer__tune-toggle ${showControls ? 'mosaic-viewer__tune-toggle--active' : ''}`}
               onClick={() => setShowControls(!showControls)}
-              title="Toggle fine tune settings"
+              title="Adjust artwork settings"
+              aria-label="Adjust artwork"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M2 4H10M14 4H12M4 8H14M2 8H3M2 12H7M11 12H14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
@@ -863,6 +923,41 @@ export default function MosaicViewer({
           <div className="mosaic-viewer__controls-header">
             <h3>FINE TUNE ARTWORK</h3>
             <button className="btn-icon" onClick={() => setShowControls(false)}>✕</button>
+          </div>
+
+          {/* Studio & Master Export Shortcuts */}
+          <div className="mosaic-viewer__control-group">
+            <span className="type-label">Explore & Export</span>
+            <div className="mosaic-viewer__studio-shortcuts">
+              <button
+                className="btn btn-secondary mosaic-viewer__shortcut-btn"
+                onClick={() => {
+                  setShowControls(false);
+                  handleToggle3DStudio(true);
+                }}
+                title="Launch 360° 3D Bas-Relief Topographic Studio"
+              >
+                <span>🌐 360° 3D Studio</span>
+              </button>
+              <button
+                className="btn btn-secondary mosaic-viewer__shortcut-btn"
+                onClick={() => {
+                  setShowControls(false);
+                  setShowWallPrintModal(true);
+                }}
+                title="Open Wall Print & 300 DPI PDF dialog"
+              >
+                <span>🖼 Wall Print (300 DPI)</span>
+              </button>
+              <button
+                className="btn btn-secondary mosaic-viewer__shortcut-btn"
+                onClick={handleDownloadWholeImageMacro}
+                disabled={exportingMacro}
+                title="Download whole image as an ultra high-res macro PNG"
+              >
+                <span>🔍 {exportingMacro ? (macroStatus || 'Rendering...') : 'Macro Detail PNG'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Zoom Discovery */}
@@ -1170,7 +1265,7 @@ export default function MosaicViewer({
       )}
 
       {/* Bottom Floating Control Bar */}
-      {revealPhase === 'complete' && (
+      {revealPhase === 'complete' && !showControls && (
         <div 
           className="mosaic-viewer__toolbar"
           onClick={(e) => e.stopPropagation()}
@@ -1178,47 +1273,39 @@ export default function MosaicViewer({
           onPointerDown={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >
+          {/* Quick Compare Button */}
           <button 
-            className="btn btn-primary mosaic-viewer__export-btn" 
-            onClick={() => setShowWallPrintModal(true)}
-            title="Export for wall printing (300 DPI PDF, Ultra 8K PNG, Print JPEG)"
+            className={`btn btn-secondary mosaic-viewer__tb-btn ${compareMode ? 'mosaic-viewer__tb-btn--active' : ''}`}
+            onClick={() => {
+              setCompareMode(!compareMode);
+              lastInteractionRef.current = Date.now();
+            }}
+            title={compareMode ? 'Show photographic mosaic' : 'Compare original portrait'}
           >
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-              <path d="M2 11V13H14V11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M8 2V10M5 7L8 10L11 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M8 1.5v13a6.5 6.5 0 0 0 0-13z" fill="currentColor"/>
             </svg>
-            <span>Wall Print & Export</span>
+            <span>{compareMode ? 'Mosaic' : 'Compare'}</span>
           </button>
 
-          {/* Download Whole-Image Macro Detail PNG */}
+          {/* Replay Transformation Animation */}
           <button 
-            className="btn btn-secondary mosaic-viewer__macro-btn"
-            onClick={handleDownloadWholeImageMacro}
-            disabled={exportingMacro}
-            title="Download entire portrait as an ultra high-resolution macro detail PNG"
+            className="btn btn-secondary mosaic-viewer__tb-btn"
+            onClick={handleReplay}
+            title="Replay the transformation reveal"
           >
-            {exportingMacro ? (
-              <>
-                <span className="mosaic-viewer__spinner" />
-                <span>{macroStatus || 'Rendering...'}</span>
-              </>
-            ) : (
-              <>
-                <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                  <path d="M2 11V13H14V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M8 2V10M5 7L8 10L11 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="8" cy="6" r="1.5" fill="currentColor"/>
-                </svg>
-                <span>Macro Detail PNG</span>
-              </>
-            )}
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <polygon points="4,2 14,8 4,14" fill="currentColor"/>
+            </svg>
+            <span>Replay</span>
           </button>
 
-          {/* Shapes & Filters Drawer Trigger */}
+          {/* Adjust Drawer Trigger */}
           <button 
-            className={`btn btn-secondary mosaic-viewer__tune-btn ${showControls ? 'mosaic-viewer__tune-btn--active' : ''}`} 
+            className={`btn btn-secondary mosaic-viewer__tb-btn ${showControls ? 'mosaic-viewer__tb-btn--active' : ''}`} 
             onClick={() => setShowControls(!showControls)}
-            title="Open shapes, mood filters & adjustments"
+            title="Adjust density, shapes, 3D, filters & export"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M2 4H10M14 4H12M4 8H14M2 8H3M2 12H7M11 12H14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
@@ -1226,62 +1313,22 @@ export default function MosaicViewer({
               <circle cx="4" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
               <circle cx="9" cy="12" r="1.5" stroke="currentColor" strokeWidth="1.3"/>
             </svg>
-            <span>Shapes & Filters</span>
+            <span>Adjust</span>
           </button>
 
-          {/* 360° 3D Studio Trigger */}
+          {/* Share Button with Web Share API and Copy Fallback */}
           <button 
-            className="btn btn-secondary mosaic-viewer__3d-studio-btn"
-            onClick={() => handleToggle3DStudio(true)}
-            title="Explore in 360° 3D Camera Studio with physical depth pop-out"
-          >
-            <span style={{ fontSize: '0.9rem' }}>🌐</span>
-            <span>360° 3D</span>
-          </button>
-
-          {/* Quick Compare Button */}
-          <button 
-            className={`btn btn-secondary mosaic-viewer__compare-btn ${compareMode ? 'mosaic-viewer__compare-btn--active' : ''}`}
-            onClick={() => {
-              setCompareMode(!compareMode);
-              lastInteractionRef.current = Date.now();
-            }}
-            title={compareMode ? 'Show photographic mosaic' : 'Compare original portrait'}
+            className={`btn btn-secondary mosaic-viewer__tb-btn ${copied ? 'mosaic-viewer__tb-btn--active' : ''}`}
+            onClick={handleShare}
+            title={copied ? 'Link copied to clipboard!' : 'Share portrait'}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M8 1V15M1 8C1 11.866 4.134 15 8 15C11.866 15 15 11.866 15 8C15 4.134 11.866 1 8 1C4.134 1 1 4.134 1 8Z" stroke="currentColor" strokeWidth="1.3"/>
-              <path d="M8 3A5 5 0 0 1 8 13Z" fill="currentColor"/>
+              <circle cx="12.5" cy="3.5" r="2" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="3.5" cy="8" r="2" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="12.5" cy="12.5" r="2" stroke="currentColor" strokeWidth="1.3"/>
+              <path d="M5.3 7.1l5.4-2.7M5.3 8.9l5.4 2.7" stroke="currentColor" strokeWidth="1.3"/>
             </svg>
-            <span>{compareMode ? 'Show Mosaic' : 'Compare'}</span>
-          </button>
-
-          {canShare() && (
-            <button className="btn-icon" onClick={handleShare} title="Share portrait">
-              <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                <circle cx="14" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-                <circle cx="4" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-                <circle cx="14" cy="14" r="2.5" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M6.3 7.8L11.7 5.2M6.3 10.2L11.7 12.8" stroke="currentColor" strokeWidth="1.3"/>
-              </svg>
-            </button>
-          )}
-
-          <button 
-            className="btn-icon" 
-            onClick={handleCopyLink} 
-            title={copied ? 'Link copied to clipboard!' : 'Copy app link'}
-          >
-            {copied ? (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8L6.5 11.5L13 5" stroke="#4ade80" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6.5 9.5L9.5 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <path d="M8.5 10.5L7 12C5.9 13.1 4.1 13.1 3 12C1.9 10.9 1.9 9.1 3 8L4.5 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <path d="M7.5 5.5L9 4C10.1 2.9 11.9 2.9 13 4C14.1 5.1 14.1 6.9 13 8L11.5 9.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-            )}
+            <span>{copied ? 'Copied!' : 'Share'}</span>
           </button>
         </div>
       )}

@@ -50,14 +50,21 @@ export function getGridDimensions(
   density: TileDensity,
   baseWidth = 2400
 ): { cols: number; rows: number; renderTileSize: number; outputWidth: number; outputHeight: number } {
-  // Density columns: Bold = ~36, Balanced = ~56, Fine = ~84
-  const densityCols: Record<TileDensity, number> = {
+  // Adaptive density: on mobile (screen < 640px), choose slightly lower column counts
+  // so that individual photos don't shrink below 8-9px CSS size on phone viewports.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+
+  const densityCols: Record<TileDensity, number> = isMobile ? {
+    bold: 28,
+    balanced: 44,
+    fine: 64,
+  } : {
     bold: 36,
     balanced: 56,
     fine: 84,
   };
 
-  const cols = densityCols[density] || 84;
+  const cols = densityCols[density] || (isMobile ? 44 : 56);
   const aspect = imageHeight / imageWidth;
   const renderTileSize = Math.max(20, Math.round(baseWidth / cols));
   const outputWidth = cols * renderTileSize;
@@ -144,15 +151,15 @@ export function findBestTile(
 
   for (let i = 0; i < tiles.length; i++) {
     // For salient features (contrast edges, pupils, highlights), weight luminance 3.2x higher
-    const lWeight = isSalientFeature ? 3.2 : 1.6;
+    const lWeight = isSalientFeature ? 3.4 : 1.9;
     const dL = (targetLab.L - tiles[i].avgLab.L) * lWeight;
     const da = targetLab.a - tiles[i].avgLab.a;
     const db = targetLab.b - tiles[i].avgLab.b;
     let dist = Math.sqrt(dL * dL + da * da + db * db);
 
-    // In critical salient details, do NOT artificially penalize the best matching tones
+    // Apply modest spatial repetition penalty without picking wildly wrong tonal matches
     if (recentSet.has(i)) {
-      dist += isSalientFeature ? 6 : 35;
+      dist += isSalientFeature ? 4 : 14;
     }
 
     if (dist < minDistance) {
@@ -166,7 +173,7 @@ export function findBestTile(
   // In salient features, use ZERO randomness so details remain crisp and exact!
   if (!isSalientFeature && randomness > 0.01 && candidates.length > 5) {
     candidates.sort((a, b) => a.dist - b.dist);
-    const poolSize = Math.min(5, Math.max(1, Math.floor(candidates.length * randomness * 0.2)));
+    const poolSize = Math.min(4, Math.max(1, Math.floor(candidates.length * randomness * 0.15)));
     const selected = candidates[Math.floor(Math.random() * poolSize)];
     return selected.index;
   }
@@ -670,19 +677,14 @@ export function renderMosaicViewport(
   ctx.imageSmoothingQuality = 'high';
 
   // Dynamic zoom attenuation:
-  // As the user zooms in to discover close-up moments, reduce color tint and fade out the portrait overlay
-  // so the individual photographs are 100% crisp, pristine, and never hazy or blurred!
-  const zoomFade = Math.max(0.12, 1 - (zoom - 1.0) / 2.5);
-  const baseTintAlpha = (config.colorCorrection ?? 0.45) * zoomFade;
+  // As the user zooms in to discover close-up moments, completely fade out color tint and overlay
+  // so the individual photographs are 100% crisp, authentic, and never hazy or washed out.
+  const zoomFade = Math.max(0, 1 - (zoom - 1.0) / 0.6);
+  const baseTintAlpha = (config.colorCorrection ?? 0.25) * zoomFade;
 
-  // Zoom-out facial clarity factor:
-  // At zoom <= 1.0 (max zoom out), clarity factor is at its peak (1.0)!
-  // At zoom > 1.15, it dissolves smoothly until 2.1x where it reaches 0
-  const zoomOutFactor = Math.max(0, Math.min(1, 1 - (zoom - 1.0) / 1.15));
-  const facialClarity = config.facialClarity ?? 1.0;
   const tileShape = config.shape || 'square';
 
-  // Draw ONLY visible tiles directly from the 480px source photos to the screen!
+  // Draw ONLY visible tiles directly from the source photos to the screen!
   for (let r = minRow; r <= maxRow; r++) {
     const tileY = Math.round(artY + r * tileScreenH);
     const drawH = Math.round(artY + (r + 1) * tileScreenH) - tileY;
@@ -695,11 +697,11 @@ export function renderMosaicViewport(
       const tile = tiles[tileIndex] || tiles[0];
 
       // Draw high-resolution photo tile directly at screen dimensions.
-      // If zoomed in close (drawW > 220px), use original full photo for zero pixelation!
-      const source = (drawW > 220 && tile.original) ? tile.original : tile.thumbnail;
+      // If zoomed in close (drawW > 160px), use original full photo for zero pixelation!
+      const source = (drawW > 160 && tile.original) ? tile.original : tile.thumbnail;
       drawTileWithShape(ctx, tileShape, source, tileX, tileY, drawW, drawH, r, c, config.effect3D, config.depth3D);
 
-      // Adaptive color tinting across all tiles uniformly (fades gracefully when zooming into tiles)
+      // Adaptive color tinting across all tiles uniformly (fades completely to 0 on zoom in)
       if (baseTintAlpha > 0.01 && mosaicResult.cellColors && mosaicResult.cellColors[r]) {
         const color = mosaicResult.cellColors[r][c];
         if (color) {
@@ -720,14 +722,13 @@ export function renderMosaicViewport(
     }
   }
 
-  // Portrait Clarity across the entire portrait (NO artificial oval mask!):
-  // At zoom <= 1.0 (zoomed out to view whole portrait), the clarity setting
-  // keeps facial features, expression, and overall form crisp and recognizable.
-  // As the user zooms in, this dissolves smoothly so tiles are 100% pure photographs!
-  const baseOverlay = config.overlayOpacity ?? 0.35;
-  const overlayZoomFactor = Math.max(0, 1 - (zoom - 1.0) / 1.4);
-  const clarityBoost = (config.facialClarity ?? 1.0) * 0.28 * zoomOutFactor;
-  const effectiveOverlay = Math.min(0.58, (baseOverlay + clarityBoost) * overlayZoomFactor);
+  // Portrait Contour Clarity:
+  // At zoom <= 1.0 (zoomed out to view whole portrait), subtle overlay provides crisp contour structure.
+  // As the user zooms in, this dissolves completely by 1.35x zoom so tiles are 100% pure photographs!
+  const baseOverlay = config.overlayOpacity ?? 0.18;
+  const overlayZoomFactor = Math.max(0, 1 - (zoom - 1.0) / 0.35);
+  const clarityBoost = (config.facialClarity ?? 1.0) * 0.08 * overlayZoomFactor;
+  const effectiveOverlay = Math.min(0.28, (baseOverlay + clarityBoost) * overlayZoomFactor);
 
   if (effectiveOverlay > 0.005) {
     ctx.globalAlpha = effectiveOverlay;

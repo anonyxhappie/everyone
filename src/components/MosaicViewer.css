@@ -431,62 +431,124 @@
   z-index: 20;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   animation: fadeInUp 0.4s var(--ease-out);
+  max-width: calc(100vw - 24px);
 }
 
-.mosaic-viewer__export-btn {
-  padding: 10px 22px;
-  font-size: 0.8125rem;
-  border-radius: 100px;
-  gap: 8px;
-  background: #f0ebe2;
-  color: #080808;
-  font-weight: 500;
-}
-
-.mosaic-viewer__export-btn:hover {
-  background: #ffffff;
-  box-shadow: 0 4px 20px rgba(240, 235, 226, 0.2);
-}
-
-.mosaic-viewer__macro-btn {
-  padding: 10px 18px;
+.mosaic-viewer__tb-btn {
+  padding: 10px 16px;
   font-size: 0.8125rem;
   border-radius: 100px;
   gap: 7px;
-  background: rgba(240, 235, 226, 0.08);
-  border: 1px solid rgba(240, 235, 226, 0.24);
-  color: #f5f2eb;
-  font-weight: 500;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.mosaic-viewer__macro-btn:hover {
-  background: rgba(240, 235, 226, 0.16);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 16px rgba(235, 215, 175, 0.15);
-}
-
-.mosaic-viewer__tune-btn {
-  padding: 10px 18px;
-  font-size: 0.8125rem;
-  border-radius: 100px;
-  gap: 7px;
-  border-color: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: #e5ded3;
+  background: transparent;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
 }
 
-.mosaic-viewer__tune-btn:hover {
+.mosaic-viewer__tb-btn:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.28);
   color: #fff;
 }
 
-.mosaic-viewer__tune-btn--active {
+.mosaic-viewer__tb-btn--active {
   background: rgba(235, 215, 175, 0.18);
   border-color: var(--accent);
   color: #fbf5eb;
+  box-shadow: 0 0 14px rgba(235, 215, 175, 0.15);
+}
+
+.mosaic-viewer__tb-btn--make {
+  background: #f0ebe2;
+  color: #080808;
+  font-weight: 500;
+  border-color: #f0ebe2;
+  box-shadow: 0 2px 14px rgba(240, 235, 226, 0.2);
+}
+
+.mosaic-viewer__tb-btn--make:hover {
+  background: #ffffff;
+  color: #000;
+  transform: translateY(-1px);
+}
+
+/* Floating Reset Framing Button when Zoomed In */
+.mosaic-viewer__reset-float-btn {
+  position: absolute;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(14, 14, 16, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 100px;
+  color: #f5f2eb;
+  font-size: 0.75rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  z-index: 22;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.mosaic-viewer__reset-float-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Header Make Yours Button */
+.mosaic-viewer__header-make-btn {
+  padding: 7px 14px;
+  font-size: 0.75rem;
+  border-radius: 100px;
+  gap: 5px;
+  min-height: 38px;
+  background: #f0ebe2;
+  color: #080808;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mosaic-viewer__header-make-btn:hover {
+  background: #ffffff;
+}
+
+/* Studio & Export Shortcuts in Drawer */
+.mosaic-viewer__studio-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mosaic-viewer__shortcut-btn {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  justify-content: flex-start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  color: #f2eee8;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.mosaic-viewer__shortcut-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
 }
 
 /* Tile Shapes Grid */
@@ -821,36 +883,9 @@
 }
 
 /* ============================================
-   Mobile Adjustments
+   Responsive Layout & Mobile Ergonomics
    ============================================ */
 
-@media (max-width: 640px) {
-  .mosaic-viewer__controls {
-    top: auto;
-    bottom: 84px;
-    right: var(--space-md);
-    left: var(--space-md);
-    width: auto;
-  }
-
-  .mosaic-viewer__toolbar {
-    bottom: var(--space-md);
-    width: calc(100% - 32px);
-    justify-content: space-around;
-  }
-
-  .mosaic-viewer__zoom-hint {
-    bottom: 78px;
-    font-size: 0.7rem;
-    padding: 8px 14px;
-    max-width: 90vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
-
-
-/* Responsive interaction layer: keeps the artwork immersive on phones and tablets. */
 .mosaic-viewer__header-actions {
   display: flex;
   align-items: center;
@@ -860,66 +895,62 @@
 
 @media (max-width: 900px) {
   .mosaic-viewer__header {
-    padding: 14px 18px;
+    padding: 12px 16px;
     gap: 12px;
   }
 
   .mosaic-viewer__brand {
-    font-size: 0.68rem;
-    letter-spacing: 0.12em;
-    text-align: center;
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40vw;
   }
 
   .mosaic-viewer__toolbar {
-    gap: 6px;
-    max-width: calc(100vw - 24px);
+    gap: 5px;
+    padding: 5px;
   }
 
-  .mosaic-viewer__export-btn,
-  .mosaic-viewer__macro-btn,
-  .mosaic-viewer__tune-btn,
-  .mosaic-viewer__3d-studio-btn,
-  .mosaic-viewer__compare-btn {
-    padding: 10px 12px;
+  .mosaic-viewer__tb-btn {
+    padding: 8px 12px;
     font-size: 0.75rem;
-    gap: 6px;
   }
 }
 
 @media (max-width: 640px) {
   .mosaic-viewer__header {
-    padding: max(10px, env(safe-area-inset-top)) 12px 12px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 10px;
     align-items: center;
     gap: 8px;
   }
 
   .mosaic-viewer__back-btn {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     gap: 4px;
     white-space: nowrap;
-    min-height: 40px;
-    padding: 8px 0;
+    min-height: 44px;
+    padding: 8px 6px;
   }
 
   .mosaic-viewer__brand {
-    flex: 1;
-    min-width: 0;
-    max-width: 38vw;
-    font-size: 0.58rem;
-    line-height: 1.35;
-    letter-spacing: 0.08em;
-    overflow-wrap: anywhere;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 32vw;
   }
 
   .mosaic-viewer__header-actions {
     gap: 6px;
   }
 
-  .mosaic-viewer__header-3d-btn {
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 0.7rem;
-    white-space: nowrap;
+  .mosaic-viewer__header-make-btn {
+    font-size: 0.72rem;
+    padding: 6px 10px;
+    min-height: 38px;
   }
 
   .mosaic-viewer__tune-toggle {
@@ -928,13 +959,54 @@
     flex-shrink: 0;
   }
 
+  /* Single-row sleek floating toolbar on mobile */
+  .mosaic-viewer__toolbar {
+    left: 50%;
+    right: auto;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 16px);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 5px 6px;
+    border-radius: 100px;
+    background: rgba(14, 14, 16, 0.92);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mosaic-viewer__toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mosaic-viewer__tb-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 0.72rem;
+    gap: 4px;
+    white-space: nowrap;
+    line-height: 1;
+    border-radius: 100px;
+  }
+
+  .mosaic-viewer__tb-btn svg {
+    flex-shrink: 0;
+  }
+
+  /* Controls Drawer as clean bottom-sheet on mobile */
   .mosaic-viewer__controls {
     top: auto;
-    bottom: calc(82px + env(safe-area-inset-bottom));
+    bottom: calc(72px + env(safe-area-inset-bottom));
     left: 10px;
     right: 10px;
     width: auto;
-    max-height: min(68dvh, 620px);
+    max-height: min(70dvh, 580px);
     padding: 16px;
     border-radius: 18px;
     overflow-y: auto;
@@ -949,49 +1021,21 @@
     background: rgba(14, 14, 14, 0.97);
   }
 
-  .mosaic-viewer__toolbar {
-    left: 10px;
-    right: 10px;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    transform: none;
-    width: auto;
-    max-width: none;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    padding: 8px;
-    border-radius: 18px;
-  }
-
-  .mosaic-viewer__toolbar > button,
-  .mosaic-viewer__toolbar > .btn-icon {
-    min-width: 0;
-    min-height: 42px;
-    width: 100%;
-    justify-content: center;
-    padding: 9px 6px;
-    font-size: 0.68rem;
-    gap: 5px;
-    white-space: normal;
-    line-height: 1.2;
-  }
-
-  .mosaic-viewer__toolbar > button svg {
-    flex-shrink: 0;
-  }
-
-  .mosaic-viewer__toolbar > button span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-
   .mosaic-viewer__zoom-hint {
-    bottom: calc(150px + env(safe-area-inset-bottom));
+    bottom: calc(70px + env(safe-area-inset-bottom));
     width: max-content;
     max-width: calc(100vw - 32px);
-    white-space: normal;
-    text-align: center;
-    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.68rem;
+    padding: 6px 14px;
+  }
+
+  .mosaic-viewer__reset-float-btn {
+    top: calc(58px + env(safe-area-inset-top));
+    font-size: 0.72rem;
+    padding: 7px 14px;
   }
 
   .mosaic-viewer__shape-grid {
@@ -1024,7 +1068,7 @@
   }
 }
 
-@media (max-width: 380px) {
+@media (max-width: 480px) {
   .mosaic-viewer__brand {
     display: none;
   }
@@ -1033,16 +1077,25 @@
     justify-content: space-between;
   }
 
-  .mosaic-viewer__toolbar > button {
-    font-size: 0.62rem;
-    padding-inline: 4px;
+  .mosaic-viewer__tb-btn {
+    font-size: 0.68rem;
+    padding: 8px 8px;
+    gap: 3px;
+  }
+}
+
+@media (max-width: 340px) {
+  .mosaic-viewer__tb-btn {
+    font-size: 0.64rem;
+    padding: 8px 6px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mosaic-viewer__toolbar,
   .mosaic-viewer__controls,
-  .mosaic-inspector {
+  .mosaic-inspector,
+  .mosaic-viewer__reset-float-btn {
     animation: none;
   }
 }

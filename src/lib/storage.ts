@@ -3,7 +3,7 @@ import type { MosaicConfig, TileDensity, TileShape, Effect3D } from './mosaicGen
 import type { FilterPreset, ImageAdjustments } from './imageProcessing';
 
 export const DEFAULT_CONFIG: MosaicConfig = {
-  density: 'fine',
+  density: 'balanced',
   shape: 'square',
   filterPreset: 'none',
   adjustments: {
@@ -12,8 +12,8 @@ export const DEFAULT_CONFIG: MosaicConfig = {
     warmth: 0,
     vignette: 0.15,
   },
-  overlayOpacity: 0.35,
-  colorCorrection: 0.45,
+  overlayOpacity: 0.18,
+  colorCorrection: 0.25,
   facialClarity: 1.0,
   effect3D: 'none',
   depth3D: 0.5,

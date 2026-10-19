@@ -89,19 +89,67 @@ export function cropImage(
  */
 export function generateSelfCrops(
   sourceCanvas: HTMLCanvasElement,
-  targetTileSize = 480
+  targetTileSize = 360
 ): HTMLCanvasElement[] {
   const crops: HTMLCanvasElement[] = [];
   const W = sourceCanvas.width;
   const H = sourceCanvas.height;
   const minDim = Math.min(W, H);
 
-  // Helper to safely extract a square crop
+  // Fast check on source canvas pixel data for feature detection
+  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+  const srcData = srcCtx ? srcCtx.getImageData(0, 0, W, H).data : null;
+
+  const faceCenterX = W * 0.5;
+  const faceCenterY = H * 0.44;
+
+  // Helper to compute local luminance variance in candidate region
+  const checkVariance = (sx: number, sy: number, size: number): number => {
+    if (!srcData) return 10;
+    const step = Math.max(2, Math.floor(size / 16));
+    let sum = 0, sumSq = 0, count = 0;
+    const endX = Math.min(W, sx + size);
+    const endY = Math.min(H, sy + size);
+    for (let y = sy; y < endY; y += step) {
+      for (let x = sx; x < endX; x += step) {
+        const idx = (y * W + x) * 4;
+        const lum = 0.299 * srcData[idx] + 0.587 * srcData[idx + 1] + 0.114 * srcData[idx + 2];
+        sum += lum;
+        sumSq += lum * lum;
+        count++;
+      }
+    }
+    if (count === 0) return 0;
+    const mean = sum / count;
+    return Math.sqrt(Math.max(0, sumSq / count - mean * mean));
+  };
+
+  // Helper to safely extract a square crop, nudging flat regions towards subject features
   const addCrop = (centerX: number, centerY: number, cropSize: number) => {
-    const size = Math.max(16, Math.min(minDim, Math.round(cropSize)));
-    const half = size / 2;
-    const sx = Math.max(0, Math.min(W - size, Math.round(centerX - half)));
-    const sy = Math.max(0, Math.min(H - size, Math.round(centerY - half)));
+    let size = Math.max(24, Math.min(minDim, Math.round(cropSize)));
+    let half = size / 2;
+    let cx = centerX;
+    let cy = centerY;
+
+    let sx = Math.max(0, Math.min(W - size, Math.round(cx - half)));
+    let sy = Math.max(0, Math.min(H - size, Math.round(cy - half)));
+
+    // If region is completely uniform (flat background / flat dark fabric),
+    // nudge towards face center to include contour, hair, or edge
+    if (srcData) {
+      let v = checkVariance(sx, sy, size);
+      let attempts = 0;
+      while (v < 5.5 && attempts < 3) {
+        cx = cx * 0.65 + faceCenterX * 0.35;
+        cy = cy * 0.65 + faceCenterY * 0.35;
+        size = Math.min(minDim, Math.round(size * 1.15));
+        half = size / 2;
+        sx = Math.max(0, Math.min(W - size, Math.round(cx - half)));
+        sy = Math.max(0, Math.min(H - size, Math.round(cy - half)));
+        v = checkVariance(sx, sy, size);
+        attempts++;
+      }
+    }
 
     const canvas = document.createElement('canvas');
     canvas.width = targetTileSize;
@@ -114,11 +162,19 @@ export function generateSelfCrops(
     crops.push(canvas);
   };
 
-  // 1. Micro Detail Scale (8% - 11% of image dimension)
-  // Fine grid across the photo: captures eyes, lips, lashes, skin, hair, fabric weave
-  const microSize = minDim * 0.10;
-  const colsMicro = 9;
-  const rowsMicro = 11;
+  // 1. High-Density Facial Core Scale (eyes, nose, lips, smile, expressions)
+  const facialSizes = [minDim * 0.11, minDim * 0.15, minDim * 0.20, minDim * 0.26];
+  for (let i = 0; i < 48; i++) {
+    const size = facialSizes[i % facialSizes.length];
+    const jitterX = (Math.random() - 0.5) * W * 0.42;
+    const jitterY = (Math.random() - 0.5) * H * 0.45;
+    addCrop(faceCenterX + jitterX, faceCenterY + jitterY, size);
+  }
+
+  // 2. Micro Detail Scale (capturing eyes, lashes, skin, hair strands, fabric)
+  const microSize = minDim * 0.12;
+  const colsMicro = 8;
+  const rowsMicro = 10;
   for (let r = 0; r < rowsMicro; r++) {
     const cy = ((r + 0.5) / rowsMicro) * H;
     for (let c = 0; c < colsMicro; c++) {
@@ -127,11 +183,10 @@ export function generateSelfCrops(
     }
   }
 
-  // 2. Feature Scale (18% - 22% of image dimension)
-  // Captures full eyes, nose, smile, ear, collar, cheek contours
-  const featureSize = minDim * 0.20;
-  const colsFeature = 7;
-  const rowsFeature = 8;
+  // 3. Feature Scale (full eyes, nose, smile, ears, cheek contours)
+  const featureSize = minDim * 0.22;
+  const colsFeature = 6;
+  const rowsFeature = 7;
   for (let r = 0; r < rowsFeature; r++) {
     const cy = ((r + 0.5) / rowsFeature) * H;
     for (let c = 0; c < colsFeature; c++) {
@@ -140,11 +195,10 @@ export function generateSelfCrops(
     }
   }
 
-  // 3. Medium Scale (32% - 38% of image dimension)
-  // Captures half face, jawline, forehead, shoulders
-  const medSize = minDim * 0.35;
+  // 4. Medium Scale (half face, jawline, forehead, hair volume, collar)
+  const medSize = minDim * 0.36;
   const colsMed = 4;
-  const rowsMed = 5;
+  const rowsMed = 4;
   for (let r = 0; r < rowsMed; r++) {
     const cy = ((r + 0.5) / rowsMed) * H;
     for (let c = 0; c < colsMed; c++) {
@@ -153,30 +207,14 @@ export function generateSelfCrops(
     }
   }
 
-  // 4. Broad Context Scale (50% - 65% of image dimension)
-  // Captures the whole face / head
-  const broadSize = minDim * 0.55;
-  const colsBroad = 2;
-  const rowsBroad = 3;
-  for (let r = 0; r < rowsBroad; r++) {
-    const cy = ((r + 0.5) / rowsBroad) * H;
-    for (let c = 0; c < colsBroad; c++) {
-      const cx = ((c + 0.5) / colsBroad) * W;
+  // 5. Broad Context Scale (head and shoulders, overall portrait context)
+  const broadSize = minDim * 0.58;
+  for (let r = 0; r < 2; r++) {
+    const cy = ((r + 0.5) / 2) * H;
+    for (let c = 0; c < 2; c++) {
+      const cx = ((c + 0.5) / 2) * W;
       addCrop(cx, cy, broadSize);
     }
-  }
-
-  // 5. High-Density Facial Core (concentrated on eyes, nose, mouth)
-  // In portraits, this region holds the most emotional and expressive moments
-  const faceCenterX = W * 0.5;
-  const faceCenterY = H * 0.42;
-  const facialSizes = [minDim * 0.12, minDim * 0.16, minDim * 0.22];
-
-  for (let i = 0; i < 28; i++) {
-    const size = facialSizes[i % facialSizes.length];
-    const jitterX = (Math.random() - 0.5) * W * 0.35;
-    const jitterY = (Math.random() - 0.5) * H * 0.35;
-    addCrop(faceCenterX + jitterX, faceCenterY + jitterY, size);
   }
 
   return crops;

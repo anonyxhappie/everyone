@@ -20,7 +20,7 @@ interface DriftingPhoto {
   baseOpacity: number;
   rotation: number;
   vRot: number;
-  depth: number; // 0 (far) to 1 (near)
+  depth: number;
   tileIndex: number;
 }
 
@@ -33,10 +33,12 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
   const portraitCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [tilesLoaded, setTilesLoaded] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<number>(1);
+  const pausedRef = useRef(false);
 
   // Load sample portrait and extract self-crops for the drifting field
   useEffect(() => {
     let cancelled = false;
+    // Use smaller tiles on the intro screen (120px is plenty for the drifting effect)
     loadSamplePortrait(selectedDemo).then((portrait) => {
       if (cancelled) return;
       portraitCanvasRef.current = portrait;
@@ -49,18 +51,21 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
   }, [selectedDemo]);
 
   const createPhotos = useCallback((w: number, h: number, tileCount: number): DriftingPhoto[] => {
-    const count = Math.min(80, Math.max(35, Math.floor((w * h) / 18000)));
+    // Reduce particle count on mobile for performance
+    const isMobile = w < 640;
+    const maxCount = isMobile ? 25 : 80;
+    const count = Math.min(maxCount, Math.max(isMobile ? 15 : 35, Math.floor((w * h) / (isMobile ? 30000 : 18000))));
     const photos: DriftingPhoto[] = [];
 
     for (let i = 0; i < count; i++) {
-      const depth = 0.2 + Math.random() * 0.8; // Parallax depth
+      const depth = 0.2 + Math.random() * 0.8;
       const size = Math.round((22 + depth * 38) * (Math.min(w, h) / 900));
 
       photos.push({
         x: Math.random() * w,
         y: Math.random() * h,
         vx: (Math.random() - 0.5) * 0.25 * depth,
-        vy: -0.15 - Math.random() * 0.3 * depth, // Gently drift upwards
+        vy: -0.15 - Math.random() * 0.3 * depth,
         size,
         aspect: 0.95 + Math.random() * 0.1,
         opacity: 0.15 + depth * 0.45,
@@ -83,6 +88,7 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
     if (!ctx) return;
 
     const resize = () => {
+      // Cap DPR at 2 on mobile to avoid enormous backing canvases
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -90,7 +96,7 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
       canvas.height = h * dpr;
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       photosRef.current = createPhotos(w, h, tileImagesRef.current.length || 40);
     };
@@ -98,16 +104,29 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
     resize();
     window.addEventListener('resize', resize);
 
+    // Only track mouse on desktop (no mouse events on touch devices)
     const handleMouseMove = (e: MouseEvent) => {
       mouseRef.current.targetX = e.clientX;
       mouseRef.current.targetY = e.clientY;
     };
-    window.addEventListener('mousemove', handleMouseMove);
+    if (window.matchMedia('(hover: hover)').matches) {
+      window.addEventListener('mousemove', handleMouseMove);
+    }
 
-    let startTime = performance.now();
+    // Pause animation when page is hidden
+    const handleVisibility = () => {
+      pausedRef.current = document.hidden;
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
-    const render = (now: number) => {
-      const elapsed = (now - startTime) / 1000;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const render = () => {
+      if (pausedRef.current) {
+        animFrameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
       const w = window.innerWidth;
       const h = window.innerHeight;
 
@@ -140,11 +159,7 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
         const px = cx - targetW / 2;
         const py = cy - targetH / 2;
 
-        // Portrait emerges gradually over 3 seconds
-        const emergence = Math.min(1, Math.max(0, (elapsed - 0.4) / 2.5));
-        const pulse = Math.sin(elapsed * 0.8) * 0.02;
-
-        ctx.globalAlpha = (0.28 + pulse) * emergence;
+        ctx.globalAlpha = 0.25;
         ctx.drawImage(portrait, px, py, targetW, targetH);
 
         // Soft dreamlike vignette over the portrait
@@ -164,12 +179,10 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
 
-        // Drift motion
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.vRot;
 
-        // Wrap around boundaries
         if (p.y < -p.size - 20) {
           p.y = h + p.size + 10;
           p.x = Math.random() * w;
@@ -177,7 +190,7 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
         if (p.x < -p.size - 20) p.x = w + p.size + 10;
         if (p.x > w + p.size + 20) p.x = -p.size - 10;
 
-        // Subtle mouse repulsion
+        // Subtle mouse repulsion (desktop only)
         if (m.x > 0 && m.y > 0) {
           const dx = p.x - m.x;
           const dy = p.y - m.y;
@@ -189,7 +202,6 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
           }
         }
 
-        // Draw miniature photograph
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rotation);
@@ -200,22 +212,11 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
         const ph = p.size * p.aspect;
 
         if (tileCanvas) {
-          // Thin photographic polaroid/print border
           const border = Math.max(1, Math.round(p.size * 0.06));
           ctx.fillStyle = 'rgba(240, 235, 225, 0.2)';
           ctx.fillRect(-pw / 2 - border, -ph / 2 - border, pw + border * 2, ph + border * 2 + border * 2);
-
-          // The photo image itself
           ctx.drawImage(tileCanvas, -pw / 2, -ph / 2, pw, ph);
-
-          // Subtle glossy reflection
-          const gloss = ctx.createLinearGradient(-pw / 2, -ph / 2, pw / 2, ph / 2);
-          gloss.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
-          gloss.addColorStop(0.5, 'transparent');
-          ctx.fillStyle = gloss;
-          ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
         } else {
-          // Fallback if tiles still loading
           ctx.fillStyle = 'rgba(180, 160, 140, 0.25)';
           ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
         }
@@ -226,7 +227,6 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
       animFrameRef.current = requestAnimationFrame(render);
     };
 
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!prefersReducedMotion) {
       animFrameRef.current = requestAnimationFrame(render);
     } else {
@@ -239,6 +239,7 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [createPhotos, tilesLoaded]);
 
@@ -262,65 +263,62 @@ export default function IntroScreen({ onStartCreate, onExploreDemo, isLoadingDem
           <p className="intro__subtitle">
             One face. A thousand little worlds.
           </p>
-          <p className="intro__quote">
-            "You are never just one picture. You are made of countless little moments."
-          </p>
         </div>
 
         <div className="intro__actions">
+          {/* Primary CTA: Watch the demo transformation */}
           <button 
             className="btn btn-primary intro__cta" 
-            onClick={onStartCreate}
+            onClick={() => onExploreDemo(selectedDemo)}
+            disabled={isLoadingDemo}
             autoFocus
           >
-            <span>Create your portrait</span>
+            {isLoadingDemo ? (
+              <>
+                <span className="intro__spinner" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
+                  <polygon points="6.5,5 11,8 6.5,11" fill="currentColor"/>
+                </svg>
+                <span>Watch the transformation</span>
+              </>
+            )}
+          </button>
+
+          {/* Demo subject picker */}
+          <div className="intro__demo-pills">
+            <button 
+              type="button"
+              className={`intro__demo-pill ${selectedDemo === 1 ? 'intro__demo-pill--active' : ''}`}
+              onClick={() => setSelectedDemo(1)}
+              title="Portrait 1: Sophia"
+            >
+              Sophia
+            </button>
+            <button 
+              type="button"
+              className={`intro__demo-pill ${selectedDemo === 2 ? 'intro__demo-pill--active' : ''}`}
+              onClick={() => setSelectedDemo(2)}
+              title="Portrait 2: Marcus"
+            >
+              Marcus
+            </button>
+          </div>
+
+          {/* Secondary CTA: Upload your own */}
+          <button 
+            className="btn btn-secondary intro__make-yours" 
+            onClick={onStartCreate}
+          >
+            <span>Make yours</span>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M6 3L11 8L6 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-
-          <div className="intro__demo-group">
-            <button 
-              className="btn btn-secondary intro__demo-btn" 
-              onClick={() => onExploreDemo(selectedDemo)}
-              disabled={isLoadingDemo}
-            >
-              {isLoadingDemo ? (
-                <>
-                  <span className="intro__spinner" />
-                  Loading gallery demo...
-                </>
-              ) : (
-                <>
-                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2"/>
-                    <polygon points="6.5,5 11,8 6.5,11" fill="currentColor"/>
-                  </svg>
-                  Explore demo ({selectedDemo === 1 ? 'Sophia' : 'Marcus'})
-                </>
-              )}
-            </button>
-
-            {/* Quick Demo Switcher */}
-            <div className="intro__demo-pills">
-              <button 
-                type="button"
-                className={`intro__demo-pill ${selectedDemo === 1 ? 'intro__demo-pill--active' : ''}`}
-                onClick={() => setSelectedDemo(1)}
-                title="Portrait 1: Sophia"
-              >
-                1
-              </button>
-              <button 
-                type="button"
-                className={`intro__demo-pill ${selectedDemo === 2 ? 'intro__demo-pill--active' : ''}`}
-                onClick={() => setSelectedDemo(2)}
-                title="Portrait 2: Marcus"
-              >
-                2
-              </button>
-            </div>
-          </div>
         </div>
 
         <footer className="intro__footer">
