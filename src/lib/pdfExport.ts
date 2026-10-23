@@ -88,6 +88,18 @@ export function canvasToJpegBlob(canvas: HTMLCanvasElement, quality = 0.96): Pro
   });
 }
 
+/** Convert an encoded image Blob to a data URL for jsPDF's image API. */
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Failed to read encoded image for PDF export'));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read encoded image for PDF export'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /**
  * Render Ultra High-Resolution Master Canvas for Wall Printing (up to 7,200px+)
  * Renders in non-blocking async batches so the UI remains responsive and progress updates cleanly.
@@ -113,25 +125,40 @@ export async function renderWallPrintCanvas(
   let currentW = outW;
   let currentH = outH;
 
-  while (currentW >= 3200) {
+  // Canvas allocation may fail by throwing OR by returning a null context.
+  // Bound retries so an unsupported canvas cannot leave export spinning forever.
+  let attempts = 0;
+  const minWidth = Math.min(3200, outW);
+  while (currentW >= minWidth && attempts < 6) {
+    attempts += 1;
     try {
       canvas = document.createElement('canvas');
       canvas.width = currentW;
       canvas.height = currentH;
       ctx = canvas.getContext('2d', { alpha: false });
-      if (ctx) break;
+      if (ctx && canvas.width === currentW && canvas.height === currentH) break;
     } catch {
-      currentW = Math.round(currentW * 0.75);
-      currentH = Math.round(currentH * 0.75);
+      // Continue with a smaller allocation below.
+    }
+    ctx = null;
+    currentW = Math.floor(currentW * 0.75);
+    currentH = Math.floor(currentW / aspect);
+  }
+
+  if (!ctx) {
+    // Last bounded attempt at a conservative canvas size.
+    try {
+      canvas = document.createElement('canvas');
+      canvas.width = minWidth;
+      canvas.height = Math.round(minWidth / aspect);
+      ctx = canvas.getContext('2d', { alpha: false });
+    } catch {
+      ctx = null;
     }
   }
 
   if (!ctx) {
-    // Ultimate fallback to standard dimensions
-    canvas = document.createElement('canvas');
-    canvas.width = Math.min(3200, outW);
-    canvas.height = Math.round(canvas.width / aspect);
-    ctx = canvas.getContext('2d', { alpha: false })!;
+    throw new Error('This device cannot allocate a canvas for the print export. Try a smaller print size or close other tabs.');
   }
 
   const finalW = canvas.width;
@@ -289,7 +316,10 @@ export async function exportWallPrintPdf(
   if (onProgress) onProgress(0.92, 'Embedding high-resolution photographic tiles into PDF...');
 
   // Convert canvas to high-quality JPEG for optimal PDF embedding without exceeding browser heap
-  const imgDataUrl = masterCanvas.toDataURL('image/jpeg', 0.96);
+  if (masterCanvas.width <= 0 || masterCanvas.height <= 0) throw new Error('Cannot export an empty print canvas.');
+  // Blob encoding avoids allocating an additional large base64 data URL string.
+  const imageBlob = await canvasToJpegBlob(masterCanvas, 0.96);
+  const imgDataUrl = await blobToDataUrl(imageBlob);
 
   pdf.addImage(
     imgDataUrl,
