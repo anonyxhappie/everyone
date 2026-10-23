@@ -307,7 +307,7 @@ export function loadStateFromUrlOrStorage(): {
     console.warn('Error reading stored state:', err);
   }
 
-  return { config: resultConfig, stage, demoIndex };
+  return { config: sanitizeConfig(resultConfig), stage, demoIndex };
 }
 
 /**
@@ -370,7 +370,6 @@ export async function saveSessionToIndexedDB(
     });
   } catch (err) {
     console.warn('Failed to save session into IndexedDB:', err);
-    throw err;
   }
 }
 
