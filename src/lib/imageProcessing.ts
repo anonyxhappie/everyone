@@ -2,14 +2,22 @@
 export function loadImage(source: File | string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = typeof source === 'string' ? null : URL.createObjectURL(source);
+    const cleanup = () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      img.onload = null;
+      img.onerror = null;
+    };
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image'));
-    if (typeof source === 'string') {
-      img.src = source;
-    } else {
-      img.src = URL.createObjectURL(source);
-    }
+    img.onload = () => {
+      cleanup();
+      resolve(img);
+    };
+    img.onerror = () => {
+      cleanup();
+      reject(new Error('Failed to load image'));
+    };
+    img.src = objectUrl ?? source as string;
   });
 }
 
