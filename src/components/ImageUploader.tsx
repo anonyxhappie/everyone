@@ -386,7 +386,7 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
             // Keep source images within a bounded pixel budget; the thumbnail remains the
             // fast rendering source while this smaller original supports zoom/print exports.
             const sourceCanvas = document.createElement('canvas');
-            const scale = Math.min(1, 1600 / img.naturalWidth, 1600 / img.naturalHeight);
+            const scale = Math.min(1, 640 / img.naturalWidth, 640 / img.naturalHeight);
             sourceCanvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
             sourceCanvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
             const sourceContext = sourceCanvas.getContext('2d');
