@@ -27,6 +27,30 @@ const CONFIG_KEY = 'everyone_mosaic_config_v1';
 const STAGE_KEY = 'everyone_app_stage_v1';
 const DEMO_KEY = 'everyone_demo_index_v1';
 
+function readFiniteNumber(value: string | null, fallback: number, min: number, max: number): number {
+  if (value === null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function readFiniteInt(value: string | null, fallback: number, min: number, max: number): number {
+  return Math.trunc(readFiniteNumber(value, fallback, min, max));
+}
+
+function sanitizeConfig(config: MosaicConfig): MosaicConfig {
+  const valid = { ...DEFAULT_CONFIG, ...config, adjustments: { ...DEFAULT_CONFIG.adjustments, ...(config.adjustments || {}) } };
+  valid.facialClarity = readFiniteNumber(String(valid.facialClarity), DEFAULT_CONFIG.facialClarity ?? 1, 0, 1);
+  valid.colorCorrection = readFiniteNumber(String(valid.colorCorrection), DEFAULT_CONFIG.colorCorrection ?? 0.25, 0, 0.8);
+  valid.overlayOpacity = readFiniteNumber(String(valid.overlayOpacity), DEFAULT_CONFIG.overlayOpacity ?? 0.18, 0, 0.6);
+  valid.depth3D = readFiniteNumber(String(valid.depth3D), DEFAULT_CONFIG.depth3D ?? 0.5, 0, 1);
+  valid.adjustments.contrast = readFiniteNumber(String(valid.adjustments.contrast), 1.1, 0.1, 3);
+  valid.adjustments.saturation = readFiniteNumber(String(valid.adjustments.saturation), 1, 0, 3);
+  valid.adjustments.warmth = readFiniteNumber(String(valid.adjustments.warmth), 0, -100, 100);
+  valid.adjustments.vignette = readFiniteNumber(String(valid.adjustments.vignette), 0.15, 0, 1);
+  return valid;
+}
+
 /**
  * Open or initialize IndexedDB instance
  */
@@ -42,7 +66,11 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_NAME);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     request.onerror = () => reject(request.error);
   });
 }
@@ -178,10 +206,7 @@ export function loadStateFromUrlOrStorage(): {
       if (storedConfigStr) {
         try {
           const parsed = JSON.parse(storedConfigStr);
-          Object.assign(resultConfig, parsed);
-          if (parsed.adjustments) {
-            resultConfig.adjustments = { ...DEFAULT_CONFIG.adjustments, ...parsed.adjustments };
-          }
+          Object.assign(resultConfig, sanitizeConfig(parsed as MosaicConfig));
         } catch {
           // ignore corrupted json
         }
@@ -194,7 +219,7 @@ export function loadStateFromUrlOrStorage(): {
 
       const storedDemo = localStorage.getItem(DEMO_KEY);
       if (storedDemo) {
-        demoIndex = parseInt(storedDemo, 10) || 1;
+        demoIndex = readFiniteInt(storedDemo, 1, 1, 2);
       }
     }
 
@@ -209,7 +234,7 @@ export function loadStateFromUrlOrStorage(): {
 
       const urlDemo = params.get('demo');
       if (urlDemo !== null) {
-        demoIndex = parseInt(urlDemo, 10) || 1;
+        demoIndex = readFiniteInt(urlDemo, 1, 1, 2);
       }
 
       const shape = params.get('shape') as TileShape | null;
@@ -224,17 +249,17 @@ export function loadStateFromUrlOrStorage(): {
 
       const clarity = params.get('clarity');
       if (clarity !== null) {
-        resultConfig.facialClarity = Math.max(0, Math.min(100, parseInt(clarity, 10))) / 100;
+        resultConfig.facialClarity = readFiniteInt(clarity, Math.round((resultConfig.facialClarity ?? 1) * 100), 0, 100) / 100;
       }
 
       const tint = params.get('tint');
       if (tint !== null) {
-        resultConfig.colorCorrection = Math.max(0, Math.min(80, parseInt(tint, 10))) / 100;
+        resultConfig.colorCorrection = readFiniteInt(tint, Math.round((resultConfig.colorCorrection ?? 0.25) * 100), 0, 80) / 100;
       }
 
       const overlay = params.get('overlay');
       if (overlay !== null) {
-        resultConfig.overlayOpacity = Math.max(0, Math.min(60, parseInt(overlay, 10))) / 100;
+        resultConfig.overlayOpacity = readFiniteInt(overlay, Math.round((resultConfig.overlayOpacity ?? 0.18) * 100), 0, 60) / 100;
       }
 
       const filter = params.get('filter') as FilterPreset | null;
@@ -244,22 +269,22 @@ export function loadStateFromUrlOrStorage(): {
 
       const contrast = params.get('contrast');
       if (contrast !== null) {
-        resultConfig.adjustments.contrast = parseInt(contrast, 10) / 100;
+        resultConfig.adjustments.contrast = readFiniteInt(contrast, Math.round(DEFAULT_CONFIG.adjustments.contrast * 100), 10, 300) / 100;
       }
 
       const sat = params.get('sat');
       if (sat !== null) {
-        resultConfig.adjustments.saturation = parseInt(sat, 10) / 100;
+        resultConfig.adjustments.saturation = readFiniteInt(sat, 100, 0, 300) / 100;
       }
 
       const warmth = params.get('warmth');
       if (warmth !== null) {
-        resultConfig.adjustments.warmth = parseInt(warmth, 10);
+        resultConfig.adjustments.warmth = readFiniteInt(warmth, 0, -100, 100);
       }
 
       const vig = params.get('vig');
       if (vig !== null) {
-        resultConfig.adjustments.vignette = parseInt(vig, 10) / 100;
+        resultConfig.adjustments.vignette = readFiniteInt(vig, 15, 0, 100) / 100;
       }
 
       // 3D Effect parameters
@@ -270,7 +295,7 @@ export function loadStateFromUrlOrStorage(): {
 
       const depth3d = params.get('depth3d');
       if (depth3d !== null) {
-        resultConfig.depth3D = Math.max(0, Math.min(100, parseInt(depth3d, 10))) / 100;
+        resultConfig.depth3D = readFiniteInt(depth3d, Math.round((resultConfig.depth3D ?? 0.5) * 100), 0, 100) / 100;
       }
 
       const tilt = params.get('tilt');
@@ -340,10 +365,12 @@ export async function saveSessionToIndexedDB(
 
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error ?? new Error('IndexedDB session write failed'));
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB session write was aborted'));
     });
   } catch (err) {
     console.warn('Failed to save session into IndexedDB:', err);
+    throw err;
   }
 }
 
@@ -368,10 +395,14 @@ export async function loadSessionFromIndexedDB(): Promise<{
       });
     };
 
-    const portraitBlob = await getReq('portrait_blob');
-    const portraitMeta = await getReq('portrait_meta');
-    const tilesBlobs = await getReq('tiles_blobs');
-    const origBlobs = await getReq('orig_blobs');
+    // Queue all reads while the readonly transaction is active; awaiting them one-by-one
+    // can let browsers auto-close the transaction between requests.
+    const [portraitBlob, portraitMeta, tilesBlobs, origBlobs] = await Promise.all([
+      getReq('portrait_blob'),
+      getReq('portrait_meta'),
+      getReq('tiles_blobs'),
+      getReq('orig_blobs'),
+    ]);
 
     if (!portraitBlob) return null;
 
