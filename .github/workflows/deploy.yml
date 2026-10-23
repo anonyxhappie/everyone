@@ -1,6 +1,7 @@
-name: Deploy to GitHub Pages
+name: Validate and deploy
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -10,24 +11,54 @@ permissions:
   contents: write
 
 jobs:
-  build-and-deploy:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 20
-          cache: 'npm'
-
+          cache: npm
       - name: Install dependencies
         run: npm ci
-
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
       - name: Build
         run: npm run build
+      - name: Run browser smoke tests
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/everyone-preview.log 2>&1 &
+          echo $! > /tmp/everyone-preview.pid
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          npm run test:smoke
+      - name: Upload preview logs on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-logs
+          path: /tmp/everyone-preview.log
 
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:

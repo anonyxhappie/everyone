@@ -25,6 +25,17 @@ interface TilePhoto {
   url: string;
 }
 
+const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 12_000;
+const MAX_IMAGE_PIXELS = 40_000_000;
+const MAX_TILE_COUNT = 300;
+const MAX_TOTAL_TILE_BYTES = 200 * 1024 * 1024;
+
+function validateImageFile(file: File): string | null {
+  if (file.size > MAX_IMAGE_BYTES) return `${file.name} exceeds the 25 MB per-image limit.`;
+  return null;
+}
+
 // Helper to recursively read all files from dropped items (handles directories & files)
 async function readDataTransferItems(items: DataTransferItemList): Promise<File[]> {
   const files: File[] = [];
@@ -111,8 +122,9 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
       return;
     }
 
-    if (file.size > 50 * 1024 * 1024) {
-      setError('Image is too large. Please select an image under 50MB.');
+    const fileError = validateImageFile(file);
+    if (fileError) {
+      setError(fileError);
       return;
     }
 
@@ -122,6 +134,10 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
 
     try {
       const img = await loadImage(file);
+      if (img.naturalWidth > MAX_IMAGE_DIMENSION || img.naturalHeight > MAX_IMAGE_DIMENSION ||
+          img.naturalWidth * img.naturalHeight > MAX_IMAGE_PIXELS) {
+        throw new Error('Image dimensions exceed the supported limit.');
+      }
       setPortraitImage(img);
 
       if (portraitPreview) URL.revokeObjectURL(portraitPreview);
@@ -138,8 +154,10 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
       }
 
       setStep('customize');
-    } catch {
-      setError('Could not load that image. Please try another.');
+    } catch (err) {
+      setError(err instanceof Error && err.message.includes('dimensions')
+        ? err.message
+        : 'Could not load that image. Please try another.');
     } finally {
       setProcessing(false);
     }
@@ -165,20 +183,35 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
     setError(null);
     if (sourceFolder) setFolderName(sourceFolder);
 
-    const newTiles: TilePhoto[] = valid.map((file, idx) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
-      file,
-      url: URL.createObjectURL(file),
-    }));
+    const tooLarge = valid.find(file => file.size > MAX_IMAGE_BYTES);
+    if (tooLarge) {
+      setError(validateImageFile(tooLarge));
+      return;
+    }
 
     setTilePhotos(prev => {
-      const combined = [...prev, ...newTiles];
-      if (combined.length > 400) {
-        // Revoke URLs for excess items beyond limit
-        combined.slice(400).forEach(t => URL.revokeObjectURL(t.url));
-        return combined.slice(0, 400);
+      const existingBytes = prev.reduce((sum, tile) => sum + tile.file.size, 0);
+      const accepted: File[] = [];
+      let totalBytes = existingBytes;
+      for (const file of valid) {
+        if (prev.length + accepted.length >= MAX_TILE_COUNT) break;
+        if (totalBytes + file.size > MAX_TOTAL_TILE_BYTES) break;
+        accepted.push(file);
+        totalBytes += file.size;
       }
-      return combined;
+      if (accepted.length === 0) {
+        setError('Tile photos are limited to 300 images and 200 MB total. Remove some photos or choose smaller files.');
+        return prev;
+      }
+      const newTiles: TilePhoto[] = accepted.map((file, idx) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 7)}`,
+        file,
+        url: URL.createObjectURL(file),
+      }));
+      if (accepted.length < valid.length) {
+        setError('Some photos were skipped because the 300-image or 200 MB total limit was reached.');
+      }
+      return [...prev, ...newTiles];
     });
   }, []);
 
@@ -346,10 +379,22 @@ export default function ImageUploader({ onPortraitReady, onBack }: ImageUploader
         for (let i = 0; i < limit; i++) {
           try {
             const img = await loadImage(tilePhotos[i].file);
-            // Create 480px high-resolution square thumbnail for sharp zoom & 300 DPI print
+            if (img.naturalWidth > MAX_IMAGE_DIMENSION || img.naturalHeight > MAX_IMAGE_DIMENSION ||
+                img.naturalWidth * img.naturalHeight > MAX_IMAGE_PIXELS) {
+              continue;
+            }
+            // Keep source images within a bounded pixel budget; the thumbnail remains the
+            // fast rendering source while this smaller original supports zoom/print exports.
+            const sourceCanvas = document.createElement('canvas');
+            const scale = Math.min(1, 640 / img.naturalWidth, 640 / img.naturalHeight);
+            sourceCanvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+            sourceCanvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+            const sourceContext = sourceCanvas.getContext('2d');
+            if (!sourceContext) continue;
+            sourceContext.drawImage(img, 0, 0, sourceCanvas.width, sourceCanvas.height);
             const thumb = createThumbnail(img, 480);
             canvases.push(thumb);
-            originals.push(img);
+            originals.push(sourceCanvas);
           } catch {
             // Skip unreadable files gracefully
           }
